@@ -24,6 +24,14 @@
       <scope>test</scope>
     </dependency>
 
+    <!-- Servlet API para reconhecer HttpServletRequest no código de teste -->
+    <dependency>
+      <groupId>jakarta.servlet</groupId>
+      <artifactId>jakarta.servlet-api</artifactId>
+      <version>6.0.0</version>
+      <scope>provided</scope>
+    </dependency>
+
     <dependency>
       <groupId>com.github.javaparser</groupId>
       <artifactId>javaparser-core</artifactId>

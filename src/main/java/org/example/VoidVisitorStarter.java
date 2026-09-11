@@ -3,6 +3,7 @@ package org.example;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
 import com.github.javaparser.ast.visitor.VoidVisitor;
@@ -16,7 +17,7 @@ import java.util.Set;
 
 public class VoidVisitorStarter {
     private static final String FILE_PATH =
-            "C:\\Users\\WINDOWS\\Documents\\UNINTER\\TCC\\Projetos\\TaintAnalyser\\TaintAnalyser\\src\\main\\java\\org\\example\\ReversePolishNotation.java";
+            "C:\\Users\\WINDOWS\\Documents\\UNINTER\\TCC\\Projetos\\TaintAnalyser\\TaintAnalyser\\src\\main\\java\\org\\example\\VulnerableClass.java";
 
     public static void main(String[] args) throws Exception {
         CompilationUnit cu = StaticJavaParser
@@ -26,7 +27,13 @@ public class VoidVisitorStarter {
     }
 
     public static class MethodNamePrinter extends VoidVisitorAdapter<Void> {
-       private Set<String> taintedVariables = new HashSet<>();
+       //Conjunto que guarda nome de todas as variáveis marcadas como contaminadas.
+        private Set<String> taintedVariables = new HashSet<>();
+
+        //Exemplo simplificado de Regras (Sources e Sinks).
+        private static final Set<String> SOURCES = Set.of("getParameter", "split", "readLine");
+        private static final Set<String> SINKS = Set.of("executeQuery", "println", "push");
+
 
         @Override
         public void visit(VariableDeclarationExpr md, Void arg) {
@@ -34,6 +41,23 @@ public class VoidVisitorStarter {
             for (VariableDeclarator var : md.getVariables()) {
                 String nameVariable = var.getNameAsString();
                 String typeVariable = var.getTypeAsString();
+
+                if (var.getInitializer().isPresent()){
+                    //Checa se a variável tem inicialização (ex: String input = request.getParameter("id");)
+                    Expression initializer = var.getInitializer().get();
+
+                    //1. Caso a atribuição venha direto de uma Source (Ponto de Entrada)
+                    boolean fromSource = SOURCES.stream()
+                            .anyMatch(source -> initializer.toString().contains(source));
+
+                    boolean fromTaintedVar = taintedVariables.stream()
+                            .anyMatch(tainted -> initializer.toString().contains(tainted));
+
+                    if (fromSource || fromTaintedVar ){
+                        taintedVariables.add(nameVariable);
+                        System.out.println("[+] CONTAMINATION REGISTRED: Variable '" + nameVariable + "' was marked as TAINTED!");
+                    }
+                }
                 //Gets value/expression if not null
                 String initialValue = var.getInitializer()
                         .map(Object::toString)
@@ -55,6 +79,15 @@ public class VoidVisitorStarter {
             System.out.println("[CALL METHOD FOUND] Object/Scope: "
                     + " -> Method Called: " + MethodName
                     + " | Quantity of args: " + md.getArguments().size());
+
+            if (SINKS.contains(MethodName)){
+                for (Expression argExpr : md.getArguments()){
+                    String argumentsText = argExpr.toString();
+                    if (taintedVariables.contains(argumentsText)){
+                        System.out.println("[!] SECURITY ALERT: Sink '" + MethodName + "' received an tainted argument '" + argumentsText + "'!");
+                    }
+                }
+            }
         }
     }
 }
