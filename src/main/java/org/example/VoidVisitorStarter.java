@@ -3,6 +3,7 @@ package org.example;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.VariableDeclarationExpr;
@@ -22,11 +23,12 @@ public class VoidVisitorStarter {
     public static void main(String[] args) throws Exception {
         CompilationUnit cu = StaticJavaParser
                 .parse((Files.newInputStream(Paths.get(FILE_PATH))));
-        VoidVisitor<Void> methodNameVisitor = new MethodNamePrinter();
-        methodNameVisitor.visit(cu, null);
+       VoidVisitor methodNameVisitor = new MethodNamePrinter();
+       TaintState state = new TaintState();
+        methodNameVisitor.visit(cu, state);
     }
 
-    public static class MethodNamePrinter extends VoidVisitorAdapter<Void> {
+    public static class MethodNamePrinter extends VoidVisitorAdapter<TaintState> {
        //Conjunto que guarda nome de todas as variáveis marcadas como contaminadas.
         private Set<String> taintedVariables = new HashSet<>();
 
@@ -36,8 +38,8 @@ public class VoidVisitorStarter {
 
 
         @Override
-        public void visit(VariableDeclarationExpr md, Void arg) {
-            super.visit(md, arg);
+        public void visit(VariableDeclarationExpr md, TaintState state) {
+            super.visit(md, state);
             for (VariableDeclarator var : md.getVariables()) {
                 String nameVariable = var.getNameAsString();
                 String typeVariable = var.getTypeAsString();
@@ -69,10 +71,24 @@ public class VoidVisitorStarter {
             }
         }
 
+        // Propagação por Reatribuição / Concatenação (ex: query = "SELECT * FROM user WHERE id=" + input;)
+        @Override
+        public void visit(AssignExpr md, TaintState state){
+            super.visit(md, state);
+
+            String targetVariable = md.getTarget().toString(); //Lado esquerdo da atribuição
+            String attributeValue = md.getValue().toString(); //Lado Direito da atribuição
+
+            //Se o lado direito contiver algo contaminado, o lado esquerdo se contamina..
+            if (state.containsTaintedValue(attributeValue)){
+                state.addTaint(targetVariable);
+            }
+        }
+
 
         @Override
-        public void visit(MethodCallExpr md, Void arg) {
-            super.visit(md, arg);
+        public void visit(MethodCallExpr md, TaintState state) {
+            super.visit(md, state);
 
             String MethodName = md.getNameAsString();
             String scope = md.getScope().map(Object::toString).orElse("Local/Static Scope");
